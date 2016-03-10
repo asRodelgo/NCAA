@@ -169,14 +169,17 @@ away <- rsTeams %>%
 away <- as.data.frame(away)
 # compare by a given variable:
 compare_var <- "avgScore"
-compareHA <- merge(home[,c("Season","team",compare_var)],away[,c("Season","team",compare_var)], by=c("Season","team"))
+#compareHA <- merge(home[,c("Season","team",compare_var)],away[,c("Season","team",compare_var)], by=c("Season","team"))
+compareHA <- merge(home,away, by=c("Season","team"))
 plot(compareHA[,3],compareHA[,4])
 
 compareHAmeans <- compareHA %>%
   group_by(Season) %>%
-  mutate(meanA = mean(avgScore.x), meanH = mean(avgScore.y), meanT = (meanA + meanH)/2) %>%
+  #mutate(meanA = mean(avgScore.x), meanH = mean(avgScore.y), meanT = (meanA + meanH)/2) %>%
+  mutate_each(funs(mean(.))) %>%
   distinct(Season)
-compareHAmeans
+compareHAmeans[,c("avgFga.x","avgFga.y")]
+write.csv(compareHAmeans, "compareHome_Away_means.csv",row.names=FALSE)
 ##############
 ######################################
 
