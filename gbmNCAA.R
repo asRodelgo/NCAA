@@ -1,5 +1,5 @@
 # data models 2016
-training2 <- training[,c(3:17,32:46,ncol(training))]
+#training2 <- training[,c(3:17,32:46,ncol(training))]
 training2 <- training[,c(3:ncol(training))]
 #
 # Next steps: 
@@ -37,13 +37,27 @@ valid  <- training2[-trainIndex,]
 
 # ---------------------------------
 ## models
-model <- "lm"
+# The model
+model <- "gbm"
+require(pROC)
+require(e1071)
+
+grid <- expand.grid(.interaction.depth = c(6),
+                    .n.trees=seq(100,1000,by=100),
+                    .shrinkage=c(0.003,0.005,0.01),
+                    .n.minobsinnode=5)
+
+ctrl <- trainControl(method="repeatedcv",
+                     number=10,
+                     repeats=10)
 
 set.seed(1)
 modelTune <- train(y_score ~., data=train, 
-                 method="lm",
-                 metric="RMSE", 
-                 verbose=FALSE)
+                   method="gbm",
+                   metric="RMSE",
+                   tuneGrid=grid,
+                   trControl=ctrl,
+                   verbose=FALSE)
 #######
 # ---------------------------------
 # The results
@@ -53,7 +67,11 @@ validScores <- valid$y_score # keep original yi somewhere
 valid <- as.data.frame(valid)
 valid2 <- select(valid,-y_score) # remove yi from data
 
-modelPred <- predict(modelTune, newdata = valid2) # obtain predictions
+# NEW DATA GOES HERE
+newData <- valid2
+newData <- select(newData,-y_score) # remove yi from data
+modelPred <- predict(modelTune, newdata = newData) # obtain predictions on new data
+
 compare <- cbind(validScores, modelPred) # put together yi and pred_yi
 compare <- as.data.frame(compare)
 compare <- mutate(compare, z_score = ifelse(validScores>0,1,0),
@@ -69,6 +87,6 @@ modelImp <- varImp(modelTune, scale = TRUE)
 modelImp
 #gbmImp <- arrange(gbmImp$importance, -Overall)
 modelImp <- data.frame(variable = rownames(modelImp$importance), 
-                     importance = modelImp$importance$Overall)
+                       importance = modelImp$importance$Overall)
 modelImp <- arrange(modelImp, -importance)
 

@@ -8,6 +8,10 @@ require(dplyr)
 require(tidyr)
 require(caret)
 require(tsne)
+require(bit64)
+library(doMC) # use parallel processing on this machine through "foreach"
+registerDoMC(2) # As far as I know my MAC works on 2 cores
+
 ########### DATA PREPARATION PART STARTS HERE ##############
 
 # loading the data (I previously downloaded into a local folder)
