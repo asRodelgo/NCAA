@@ -98,7 +98,17 @@ rsTeamStats <- merge(rsTeamA, rsTeamB, by=c("Season","team"))
 #rsTeamStats <- merge(rsTeamStats, teams, by.x = "team", by.y = "team_id")
 rsTeamStats <- merge(rsTeamStats, tourSeeds, by.x = c("Season","team"), by.y = c("Season","Team"), all.x = TRUE)
 rsTeamStats <- merge(rsTeamStats, teams, by.x = "team", by.y = "Team_Id")
-
+# numbersFor/numbersAg
+rsTeamStats <- rsTeamStats %>%
+  group_by(Season) %>%
+  mutate(scoreR = avgScore.x/avgScore.y, fgmR = avgFgm.x/avgFgm.y,
+         fgpR = (avgFgm.x/avgFga.x)/(avgFgm.y/avgFga.y),fgm3R = avgFgm3.x/avgFgm3.y,
+         fgp3R = (avgFgm3.x/avgFga3.x)/(avgFgm3.y/avgFga3.y), ftmR = avgFtm.x/avgFtm.y,
+         ftpR = (avgFtm.x/avgFta.x)/(avgFtm.y/avgFta.y), orR = avgOr.x/avgOr.y,
+         drR = avgDr.x/avgDr.y, astR = avgAst.x/avgAst.y, toR = avgTo.x/avgTo.y, 
+         stlR = avgStl.x/avgStl.y, blkR = avgBlk.x/avgBlk.y, pfR = avgPf.x/avgPf.y) %>%
+  select(-contains("avg"), -contains("sd"))
+  
 # --------------------
 # 5. Add outcome variables (y), i.e., tourney score difference
 # win teams
@@ -116,22 +126,31 @@ trTeams <- rename(trWinTeams,teamA = team, teamB = teamOp)
 # define even/odd numbers
 is.wholenumber <- function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
 
+# feature engineering:
+# featuresTeamA - featuresTeamB
 training <- data.frame()
 for (s in unique(trTeams$Season)){
   thisSeason <- trTeams[trTeams$Season==s,]
   thisSeasonRS <- rsTeamStats[rsTeamStats$Season==s,]
   for (i in 1:nrow(thisSeason)){
-    auxA <- thisSeasonRS[thisSeasonRS$team==thisSeason$teamA[i],3:(ncol(thisSeasonRS)-2)]
-    auxB <- thisSeasonRS[thisSeasonRS$team==thisSeason$teamB[i],3:(ncol(thisSeasonRS)-2)]
+    auxA <- thisSeasonRS[thisSeasonRS$team==thisSeason$teamA[i],5:ncol(thisSeasonRS)]
+    auxB <- thisSeasonRS[thisSeasonRS$team==thisSeason$teamB[i],5:ncol(thisSeasonRS)]
     if (is.wholenumber(i/2)){ # balance results to model differences in scores not margin of wins
       auxA_B <- auxA - auxB
-      aux_All <- c(s,paste0(thisSeason$teamA[i],"_",thisSeason$teamB[i]),auxA_B,thisSeason$y_score[i])
+      aux_All <- c(s,paste0(thisSeason$teamA[i],"_",thisSeason$teamB[i]),
+                   as.numeric(substr(as.character(thisSeasonRS[thisSeasonRS$team==thisSeason$teamB[i],]$Seed),2,3))-
+                     as.numeric(substr(as.character(thisSeasonRS[thisSeasonRS$team==thisSeason$teamA[i],]$Seed),2,3)),
+                   auxA_B,thisSeason$y_score[i])
     } else {
       auxA_B <- auxB - auxA
-      aux_All <- c(s,paste0(thisSeason$teamB[i],"_",thisSeason$teamA[i]),auxA_B,-thisSeason$y_score[i])
+      aux_All <- c(s,paste0(thisSeason$teamB[i],"_",thisSeason$teamA[i]),
+                   as.numeric(substr(as.character(thisSeasonRS[thisSeasonRS$team==thisSeason$teamA[i],]$Seed),2,3))-
+                     as.numeric(substr(as.character(thisSeasonRS[thisSeasonRS$team==thisSeason$teamB[i],]$Seed),2,3)),
+                   auxA_B,-thisSeason$y_score[i])
     }
     names(aux_All)[1] <- "Season"
     names(aux_All)[2] <- "teamA_teamB"
+    names(aux_All)[3] <- "seedDiff"
     names(aux_All)[length(aux_All)] <- "y_score"
     training <- rbind(training,as.data.frame(aux_All))
   }

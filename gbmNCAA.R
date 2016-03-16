@@ -68,7 +68,7 @@ valid <- as.data.frame(valid)
 valid2 <- select(valid,-y_score) # remove yi from data
 
 # NEW DATA GOES HERE
-newData <- valid2
+newData <- as.data.frame(valid2)
 newData <- select(newData,-y_score) # remove yi from data
 modelPred <- predict(modelTune, newdata = newData) # obtain predictions on new data
 

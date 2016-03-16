@@ -1,5 +1,5 @@
 # data models 2016
-training2 <- training[,c(3:17,32:46,ncol(training))]
+#training2 <- training[,c(3:17,32:46,ncol(training))]
 training2 <- training[,c(3:ncol(training))]
 #
 # Next steps: 
