@@ -1,6 +1,10 @@
 # data models 2016
 #training2 <- training[,c(3:17,32:46,ncol(training))]
 training2 <- training[,c(3:ncol(training))]
+# remove seed difference from training? Yes, it dominates in sample and overfits.
+# In fact, scoreRatio dominates so much that the overfitting happens anyways.
+# 
+training2 <- select(training2, -seedDiff)
 #
 # Next steps: 
 # Add more variables: conference, seed, others
@@ -60,14 +64,33 @@ modelTune <- train(y_score ~., data=train,
                    verbose=FALSE)
 #######
 # ---------------------------------
-# The results
+# The results and in Sample error (logLoss)
 modelPred <- predict(modelTune, train)
-# validation dataset
-validScores <- valid$y_score # keep original yi somewhere
+trainScores <- train$y_score
+train <- as.data.frame(train)
+train2 <- select(train,-y_score) # remove yi from data
+compare <- cbind(trainScores, modelPred) # put together yi and pred_yi
+compare <- as.data.frame(compare)
+compare <- mutate(compare, z_score = ifelse(trainScores>0,1,0),
+                  sigmoid = .logistic(modelPred,.3))
+# calculate logLoss
+logLoss <- .logLoss(compare[,c("sigmoid","z_score")])
+
+# ---------------------------------
+# validation dataset out of Sample error
+modelPred <- predict(modelTune, valid)
+validScores <- valid$y_score # keep validation yi somewhere
 valid <- as.data.frame(valid)
 valid2 <- select(valid,-y_score) # remove yi from data
+compare <- cbind(validScores, modelPred) # put together yi and pred_yi
+compare <- as.data.frame(compare)
+compare <- mutate(compare, z_score = ifelse(validScores>0,1,0),
+                  sigmoid = .logistic(modelPred,.3))
+# calculate logLoss
+logLoss <- .logLoss(compare[,c("sigmoid","z_score")])
 
-# NEW DATA GOES HERE
+# ---------------------------------
+# testing NEW DATA
 newData <- as.data.frame(valid2)
 newData <- select(newData,-y_score) # remove yi from data
 modelPred <- predict(modelTune, newdata = newData) # obtain predictions on new data
