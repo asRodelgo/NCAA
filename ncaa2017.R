@@ -4,7 +4,7 @@ library(dplyr)
 library(tidyr)
 #
 # Read data
-teams <- read.csv("data/Teams.csv")
+teams <- read.csv("data/Teams.csv", stringsAsFactors = FALSE)
 regSeason <- read.csv("data/RegularSeasonCompactResults.csv")
 thisSeason <- filter(regSeason, Season == 2016)
 thisSeasonTeams <- unique(thisSeason$Wteam)
@@ -69,5 +69,15 @@ for (i in 1:(length(thisSeasonTeams)-1)) {
 names(predict_mu) <- c("team_A", "team_B", "muA", "muB")
 
 # Probability of N(muA,sigma) > N(muB,sigma) = 
+# Simulate
+# hist(rnorm(100,predict_mu$muA[1]-predict_mu$muB[1],sqrt(2)*sigma))
+# length(which(rnorm(10000,predict_mu$muA[1]-predict_mu$muB[1],sqrt(2)*sigma)>0))
+# Analytically
+# 1-pnorm(0,mean = predict_mu$muA[1]-predict_mu$muB[1],sd = sqrt(2)*sigma)
+
+predict_mu <- mutate(predict_mu, prob = 1-pnorm(0,muA-muB,sqrt(2)*sigma))
+predict_mu2 <- inner_join(predict_mu, teams, by = c("team_A" = "Team_Id")) %>%
+  inner_join(teams, by = c("team_B" = "Team_Id")) %>%
+  select(everything(), teamName_A = Team_Name.x, teamName_B = Team_Name.y)
 
 
