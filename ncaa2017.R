@@ -78,6 +78,21 @@ names(predict_mu) <- c("team_A", "team_B", "muA", "muB")
 predict_mu <- mutate(predict_mu, prob = 1-pnorm(0,muA-muB,sqrt(2)*sigma))
 predict_mu2 <- inner_join(predict_mu, teams, by = c("team_A" = "Team_Id")) %>%
   inner_join(teams, by = c("team_B" = "Team_Id")) %>%
-  select(everything(), teamName_A = Team_Name.x, teamName_B = Team_Name.y)
+  select(everything(), teamName_A = Team_Name.x, teamName_B = Team_Name.y) %>%
+  group_by(team_A) %>%
+  mutate(pred_rankA = sum(ifelse(prob < .5, 1, 0))) %>%
+  group_by(team_B) %>%
+  mutate(pred_rankB = sum(ifelse(prob > .5, 1, 0)))
+
+ranksA <- group_by(predict_mu2,team_A) %>% select(team_A, pred_rankA) %>% distinct(team_A,.keep_all=TRUE)
+ranksB <- group_by(predict_mu2,team_B) %>% select(team_B, pred_rankB) %>% distinct(team_B,.keep_all=TRUE)
+ranks <- inner_join(ranksA, ranksB, by = c("team_A" = "team_B")) %>%
+  mutate(final_rank = pred_rankA + pred_rankB + 1) %>% 
+  left_join(teams, by = c("team_A" = "Team_Id")) %>%
+  arrange(final_rank) %>%
+  select(-pred_rankA, -pred_rankB) %>%
+  as.data.frame()
+  
 
 
+#filter(predict_mu2,(teamName_A == "Maryland"  & prob < .5) | (teamName_B == "Maryland" & prob > .5))
