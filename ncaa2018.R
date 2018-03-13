@@ -1,25 +1,24 @@
 # NCAA 2017 ------------------
 #
-library(dplyr)
-library(tidyr)
+library(tidyverse)
 #
 # Read data
-teams <- read.csv("data/Teams.csv", stringsAsFactors = FALSE)
-regSeason <- read.csv("data/RegularSeasonCompactResults.csv")
-thisSeason <- filter(regSeason, Season == 2017)
-thisSeasonTeams <- unique(thisSeason$Wteam)
-tourneyResults <- read.csv("data/TourneyCompactResults.csv")
-tourneySeeds <- read.csv("data/TourneySeeds.csv")
-thisTourneySeeds <- filter(tourneySeeds, Season == 2017)
+teams <- read.csv("data/data2018/Teams.csv", stringsAsFactors = FALSE)
+regSeason <- read.csv("data/data2018/RegularSeasonCompactResults.csv")
+thisSeason <- filter(regSeason, Season == 2018)
+thisSeasonTeams <- unique(thisSeason$WTeamID)
+tourneyResults <- read.csv("data/data2018/NCAATourneyCompactResults.csv")
+tourneySeeds <- read.csv("data/data2018/NCAATourneySeeds.csv")
+thisTourneySeeds <- filter(tourneySeeds, Season == 2018)
 selectedTeams <- thisTourneySeeds$Team
 #
 # global variables
-mu <- mean(regSeason$Wscore)
-sigma <- sd(regSeason$Wscore)
+mu <- mean(regSeason$WScore)
+sigma <- sd(regSeason$WScore)
 
 # Compute stats per team: For pts and Avg pts
-teamsW <- select(thisSeason, team_id = Wteam, pts = Wscore, ptsAg = Lscore)
-teamsL <- select(thisSeason, team_id = Lteam, pts = Lscore, ptsAg = Wscore)
+teamsW <- select(thisSeason, team_id = WTeamID, pts = WScore, ptsAg = LScore)
+teamsL <- select(thisSeason, team_id = LTeamID, pts = LScore, ptsAg = WScore)
 
 team_stats <- bind_rows(teamsW,teamsL) %>%
   arrange(team_id) %>%
@@ -31,9 +30,9 @@ team_stats <- bind_rows(teamsW,teamsL) %>%
 
 # Compute Historical NCAA tournament strength per team
 # round of 64 > 1 point; round of 32 > 2 pts; ... ; champs > 7 pts.
-teamsW_tourney <- select(tourneyResults, Season, team_id = Wteam) %>%
+teamsW_tourney <- select(tourneyResults, Season, team_id = WTeamID) %>%
   mutate(win = 1)
-teamsL_tourney <- select(tourneyResults, Season, team_id = Lteam) %>%
+teamsL_tourney <- select(tourneyResults, Season, team_id = LTeamID) %>%
   mutate(win = 0)
 
 tourney_stats <- bind_rows(teamsW_tourney,teamsL_tourney) %>%
@@ -49,7 +48,7 @@ tourney_stats <- bind_rows(teamsW_tourney,teamsL_tourney) %>%
 # Put it all together
 team_stats <- left_join(team_stats, tourney_stats, by = c("team_id" = "team_id")) %>%
   filter(team_id %in% selectedTeams) %>%
-  inner_join(thisTourneySeeds, by=c("team_id" = "Team")) %>%
+  inner_join(thisTourneySeeds, by=c("team_id" = "TeamID")) %>%
   mutate(Seed = as.numeric(substr(Seed,2,3)), tourneyPts = ifelse(is.na(tourneyPts), 0, tourneyPts)) %>%
   select(-Season) %>%
   as.data.frame()
@@ -75,7 +74,7 @@ for (i in 1:(length(selectedTeams)-1)) {
 }
 names(predict_mu) <- c("team_A", "team_B", "muA", "muB")
 
-# Probability of N(muA,sigma) > N(muB,sigma) = 
+# Probability of N(muA,sigma) > N(muB,sigma) =
 # Simulate
 # hist(rnorm(100,predict_mu$muA[1]-predict_mu$muB[1],sqrt(2)*sigma))
 # length(which(rnorm(10000,predict_mu$muA[1]-predict_mu$muB[1],sqrt(2)*sigma)>0))
@@ -85,10 +84,10 @@ names(predict_mu) <- c("team_A", "team_B", "muA", "muB")
 predict_mu <- mutate(predict_mu, prob = 1-pnorm(0,muA-muB,sqrt(2)*sigma))
 
 submission <- arrange(predict_mu,team_A,team_B) %>%
-  left_join(teams,by=c("team_A"="Team_Id")) %>%
-  left_join(teams,by=c("team_B"="Team_Id")) %>%
-  mutate(Id = ifelse(team_A > team_B, paste("2017",team_B,team_A,sep = "_"),paste("2017",team_A,team_B,sep = "_")),
-                     Pred = ifelse(team_A > team_B,1-prob,prob)) %>%
+  left_join(teams,by=c("team_A"="TeamID")) %>%
+  left_join(teams,by=c("team_B"="TeamID")) %>%
+  mutate(Id = ifelse(team_A > team_B, paste("2018",team_B,team_A,sep = "_"),paste("2018",team_A,team_B,sep = "_")),
+         Pred = ifelse(team_A > team_B,1-prob,prob)) %>%
   mutate(Pred = ifelse(Pred >=.9,.999,ifelse(Pred<=.1,0.001,Pred))) %>%
   #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
   select(Id,Pred) %>%
@@ -97,9 +96,9 @@ submission <- arrange(predict_mu,team_A,team_B) %>%
 
 # write.csv(submission, "data/ncaa2017_muyayo2.csv",row.names = FALSE)
 
-predict_mu2 <- inner_join(predict_mu, teams, by = c("team_A" = "Team_Id")) %>%
-  inner_join(teams, by = c("team_B" = "Team_Id")) %>%
-  select(everything(), teamName_A = Team_Name.x, teamName_B = Team_Name.y) %>%
+predict_mu2 <- inner_join(predict_mu, teams, by = c("team_A" = "TeamID")) %>%
+  inner_join(teams, by = c("team_B" = "TeamID")) %>%
+  select(everything(), teamName_A = TeamName.x, teamName_B = TeamName.y) %>%
   group_by(team_A) %>%
   mutate(pred_rankA = sum(ifelse(prob < .5, 1, 0))) %>%
   group_by(team_B) %>%
@@ -111,19 +110,19 @@ ranksB <- group_by(predict_mu2,team_B) %>% select(team_B, pred_rankB) %>% distin
 ranks <- full_join(ranksA, ranksB, by = c("team_A" = "team_B")) %>%
   mutate(pred_rankA = ifelse(is.na(pred_rankA),0,pred_rankA),
          pred_rankB = ifelse(is.na(pred_rankB),0,pred_rankB),
-         final_rank = pred_rankA + pred_rankB + 1) %>% 
-  left_join(teams, by = c("team_A" = "Team_Id")) %>%
-  arrange(Team_Name) %>%
+         final_rank = pred_rankA + pred_rankB + 1) %>%
+  left_join(teams, by = c("team_A" = "TeamID")) %>%
+  arrange(TeamName) %>%
   select(-pred_rankA, -pred_rankB) %>%
   as.data.frame()
-  
+
 team_stats <- inner_join(team_stats, ranks, by=c("team_id"="team_A")) %>%
   arrange(final_rank)
 
 # Check out specific match probabilities:
 teamA <- "Oregon"
 teamB <- "South Carol"
-filter(predict_mu2, (grepl(teamA,teamName_A) & grepl(teamB,teamName_B)) | 
+filter(predict_mu2, (grepl(teamA,teamName_A) & grepl(teamB,teamName_B)) |
          (grepl(teamA,teamName_B) & grepl(teamB,teamName_A)))
 
 #filter(predict_mu2,(teamName_A == "Maryland"  & prob < .5) | (teamName_B == "Maryland" & prob > .5))
