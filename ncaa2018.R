@@ -94,7 +94,7 @@ submission <- arrange(predict_mu,team_A,team_B) %>%
   arrange(Id)
 
 
-# write.csv(submission, "data/ncaa2017_muyayo2.csv",row.names = FALSE)
+# write.csv(submission, "data/ncaa2018_muyayo.csv",row.names = FALSE)
 
 predict_mu2 <- inner_join(predict_mu, teams, by = c("team_A" = "TeamID")) %>%
   inner_join(teams, by = c("team_B" = "TeamID")) %>%
@@ -119,9 +119,41 @@ ranks <- full_join(ranksA, ranksB, by = c("team_A" = "team_B")) %>%
 team_stats <- inner_join(team_stats, ranks, by=c("team_id"="team_A")) %>%
   arrange(final_rank)
 
+submission2_prep <- left_join(predict_mu2, select(team_stats, team_id, final_rank, Seed), by = c("team_A"="team_id")) %>%
+  left_join(select(team_stats, team_id, final_rank, Seed), by = c("team_B"="team_id")) %>%
+  mutate(rank_diff = final_rank.x - final_rank.y, seed_diff = Seed.x - Seed.y) %>%
+  select(-starts_with("final_ra"), -starts_with("Seed.")) %>%
+  mutate(prob_final = prob - (rank_diff + seed_diff)/100) %>%
+  mutate(prob_final = ifelse(prob_final > 1, 1, ifelse(prob_final < 0, 0, prob_final)))
+
+submission2 <- arrange(submission2_prep,team_A,team_B) %>%
+  left_join(teams,by=c("team_A"="TeamID")) %>%
+  left_join(teams,by=c("team_B"="TeamID")) %>%
+  mutate(Id = ifelse(team_A > team_B, paste("2018",team_B,team_A,sep = "_"),paste("2018",team_A,team_B,sep = "_")),
+         Pred = ifelse(team_A > team_B,1-prob_final,prob_final)) %>%
+  #mutate(Pred = ifelse(Pred >=.9,.999,ifelse(Pred<=.1,0.001,Pred))) %>%
+  #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
+  select(Id,Pred) %>%
+  arrange(Id)
+
+# write.csv(submission2, "data/ncaa2018_muyayo2.csv",row.names = FALSE)
+
+submission3 <- mutate(submission2, Pred = ifelse(Pred >=.95,.999,ifelse(Pred<=.05,0.001,Pred))) %>%
+  #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
+  select(Id,Pred) %>%
+  arrange(Id)
+
+# write.csv(submission3, "data/ncaa2018_muyayo3.csv",row.names = FALSE)
+
+# compare submissions
+compare_subm <- inner_join(submission, submission2, by = "Id")
+
+# use this to fill out a bracket manually
+#write.csv(select(predict_mu2, teamName_A, teamName_B, prob), "teamNames_probs.csv",row.names = FALSE)
+
 # Check out specific match probabilities:
-teamA <- "Oregon"
-teamB <- "South Carol"
+teamA <- "Virg"
+teamB <- "UMBC"
 filter(predict_mu2, (grepl(teamA,teamName_A) & grepl(teamB,teamName_B)) |
          (grepl(teamA,teamName_B) & grepl(teamB,teamName_A)))
 
