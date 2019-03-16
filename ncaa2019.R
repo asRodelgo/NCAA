@@ -1,15 +1,15 @@
-# NCAA 2018 ------------------
+# NCAA 2019 ------------------
 #
 library(tidyverse)
 #
 # Read data
-teams <- read.csv("data/data2018/Teams.csv", stringsAsFactors = FALSE)
-regSeason <- read.csv("data/data2018/RegularSeasonCompactResults.csv")
-thisSeason <- filter(regSeason, Season == 2018)
+teams <- read.csv("data/data2019/Teams.csv", stringsAsFactors = FALSE)
+regSeason <- read.csv("data/data2019/RegularSeasonCompactResults.csv")
+thisSeason <- filter(regSeason, Season == 2019)
 thisSeasonTeams <- unique(thisSeason$WTeamID)
-tourneyResults <- read.csv("data/data2018/NCAATourneyCompactResults.csv")
-tourneySeeds <- read.csv("data/data2018/NCAATourneySeeds.csv")
-thisTourneySeeds <- filter(tourneySeeds, Season == 2018)
+tourneyResults <- read.csv("data/data2019/NCAATourneyCompactResults.csv")
+tourneySeeds <- read.csv("data/data2019/NCAATourneySeeds.csv")
+thisTourneySeeds <- filter(tourneySeeds, Season == 2019)
 selectedTeams <- thisTourneySeeds$Team
 #
 # global variables
