@@ -42,23 +42,33 @@ team_stats_18 <- left_join(team_stats_18, loc_factor, by = c("TeamID" = "WTeamID
 set.seed(456)
 teamCluster <- kmeans(team_stats_18[,-c(1,2)], 5, nstart = 10, iter.max = 20)
 team_stats_18 <- bind_cols(team_stats_18, cluster = teamCluster$cluster)
-#
+# add clusters to regSeason
+regSeason_18 <- filter(regSeason, Season == "2018") %>%
+  left_join(select(team_stats_18, TeamID, WTeam_cluster = cluster), by = c("WTeamID"="TeamID")) %>%
+  left_join(select(team_stats_18, TeamID, LTeam_cluster = cluster), by = c("LTeamID"="TeamID")) 
 # global variables
-mu <- mean(regSeason$WScore)
-sigma <- sd(regSeason$WScore)
-
+mu <- mean(regSeason_18$WScore)
+sigma <- sd(regSeason_18$WScore)
 # Compute stats per team: For pts and Avg pts
-teamsW <- select(thisSeason, team_id = WTeamID, pts = WScore, ptsAg = LScore)
-teamsL <- select(thisSeason, team_id = LTeamID, pts = LScore, ptsAg = WScore)
-
-team_stats <- bind_rows(teamsW,teamsL) %>%
+teamsW <- select(regSeason_18, team_id = WTeamID, team_cluster = WTeam_cluster, pts = WScore, ptsAg = LScore, opp_cluster = LTeam_cluster)
+teamsL <- select(regSeason_18, team_id = LTeamID, team_cluster = LTeam_cluster, pts = LScore, ptsAg = WScore, opp_cluster = WTeam_cluster)
+#
+# Compute stats grouping by clusters
+team_stats_cluster <- bind_rows(teamsW,teamsL) %>%
   arrange(team_id) %>%
-  group_by(team_id) %>%
+  group_by(team_id, opp_cluster) %>%
   mutate(Off_rating = mean(pts), Def_rating = mean(ptsAg)) %>%
-  select(team_id, Off_rating, Def_rating) %>%
-  distinct(team_id, .keep_all=TRUE) %>%
+  select(team_id, team_cluster, Off_rating, Def_rating, opp_cluster) %>%
+  distinct(team_id, opp_cluster, .keep_all=TRUE) %>%
+  ungroup() %>%
   as.data.frame()
-
-
-
+# build a matrix
+team_stats_cluster2 <- mutate(team_stats_cluster, net_rating = Off_rating - Def_rating) %>%
+  select(contains("team"), net_rating, opp_cluster) %>%
+  spread(opp_cluster, net_rating)
+# summarize cluster vs cluster
+cluster_v_cluster <- group_by(team_stats_cluster2, team_cluster) %>%
+  select(-team_id) %>%
+  summarise_if(is.numeric, funs(avg_net_rtg = mean, sd_net_rtg = sd) , na.rm = TRUE)
+#
 
