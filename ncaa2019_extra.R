@@ -7,14 +7,16 @@
 #
 library(tidyverse)
 #
+pickSeason <- 2019
+num_clusters <- 5
 # Read data
 teams <- read.csv("data/data2019/Teams.csv", stringsAsFactors = FALSE)
 regSeason <- read.csv("data/data2019/RegularSeasonCompactResults.csv")
-thisSeason <- filter(regSeason, Season == 2018)
+thisSeason <- filter(regSeason, Season == pickSeason)
 thisSeasonTeams <- unique(thisSeason$WTeamID)
 tourneyResults <- read.csv("data/data2019/NCAATourneyCompactResults.csv")
 tourneySeeds <- read.csv("data/data2019/NCAATourneySeeds.csv")
-thisTourneySeeds <- filter(tourneySeeds, Season == 2018)
+thisTourneySeeds <- filter(tourneySeeds, Season == pickSeason)
 selectedTeams <- thisTourneySeeds$Team
 #
 # Read players and events as well
@@ -23,9 +25,9 @@ players <- read.csv("data/data2019/Players_2018.csv", stringsAsFactors = FALSE)
 team_stats <- read.csv("data/data2019/RegularSeasonDetailedRollup_v2.csv", stringsAsFactors = FALSE)
 #
 # k-means clusters
-team_stats_18 <- filter(team_stats, Season == "2018")
+team_stats_18 <- filter(team_stats, Season == pickSeason)
 # add percent of home wins
-loc_factor <- filter(regSeason, Season == "2018") %>%
+loc_factor <- filter(regSeason, Season == pickSeason) %>%
   select(WTeamID, WLoc) %>%
   group_by(WTeamID) %>%
   mutate(WinTotal = n()) %>%
@@ -40,10 +42,10 @@ team_stats_18 <- left_join(team_stats_18, loc_factor, by = c("TeamID" = "WTeamID
   mutate(HomeWinPerc = ifelse(is.na(HomeWinPerc),0,HomeWinPerc))
 
 set.seed(456)
-teamCluster <- kmeans(team_stats_18[,-c(1,2)], 10, nstart = 10, iter.max = 20)
+teamCluster <- kmeans(team_stats_18[,-c(1,2)], num_clusters, nstart = 10, iter.max = 20)
 team_stats_18 <- bind_cols(team_stats_18, cluster = teamCluster$cluster)
 # add clusters to regSeason
-regSeason_18 <- filter(regSeason, Season == "2018") %>%
+regSeason_18 <- filter(regSeason, Season == pickSeason) %>%
   left_join(select(team_stats_18, TeamID, WTeam_cluster = cluster), by = c("WTeamID"="TeamID")) %>%
   left_join(select(team_stats_18, TeamID, LTeam_cluster = cluster), by = c("LTeamID"="TeamID")) 
 # global variables
@@ -141,7 +143,7 @@ predict_mu <- mutate(predict_mu, prob = 1-pnorm(0,muA-muB,sqrt(2)*sigma))
 submission <- arrange(predict_mu,team_A,team_B) %>%
   left_join(teams,by=c("team_A"="TeamID")) %>%
   left_join(teams,by=c("team_B"="TeamID")) %>%
-  mutate(Id = ifelse(team_A > team_B, paste("2018",team_B,team_A,sep = "_"),paste("2018",team_A,team_B,sep = "_")),
+  mutate(Id = ifelse(team_A > team_B, paste(pickSeason,team_B,team_A,sep = "_"),paste(pickSeason,team_A,team_B,sep = "_")),
          Pred = ifelse(team_A > team_B,1-prob,prob)) %>%
   mutate(Pred = ifelse(Pred >=.9,.999,ifelse(Pred<=.1,0.001,Pred))) %>%
   #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
@@ -200,7 +202,7 @@ submission2_onlyProbs <- select(submission2_prep, team_A, team_B, contains("prob
 submission2 <- arrange(submission2_prep,team_A,team_B) %>%
   left_join(teams,by=c("team_A"="TeamID")) %>%
   left_join(teams,by=c("team_B"="TeamID")) %>%
-  mutate(Id = ifelse(team_A > team_B, paste("2018",team_B,team_A,sep = "_"),paste("2018",team_A,team_B,sep = "_")),
+  mutate(Id = ifelse(team_A > team_B, paste(pickSeason,team_B,team_A,sep = "_"),paste(pickSeason,team_A,team_B,sep = "_")),
          Pred = ifelse(team_A > team_B,1-prob_final,prob_final)) %>%
   #mutate(Pred = ifelse(Pred >=.9,.999,ifelse(Pred<=.1,0.001,Pred))) %>%
   #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
@@ -211,7 +213,7 @@ submission2 <- arrange(submission2_prep,team_A,team_B) %>%
 submission2clst <- arrange(submission2_onlyProbs,team_A,team_B) %>%
   left_join(teams,by=c("team_A"="TeamID")) %>%
   left_join(teams,by=c("team_B"="TeamID")) %>%
-  mutate(Id = ifelse(team_A > team_B, paste("2018",team_B,team_A,sep = "_"),paste("2018",team_A,team_B,sep = "_")),
+  mutate(Id = ifelse(team_A > team_B, paste(pickSeason,team_B,team_A,sep = "_"),paste(pickSeason,team_A,team_B,sep = "_")),
          Pred = ifelse(team_A > team_B,1-prob_final_clst,prob_final_clst)) %>%
   #mutate(Pred = ifelse(Pred >=.9,.999,ifelse(Pred<=.1,0.001,Pred))) %>%
   #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
@@ -241,11 +243,14 @@ ensemble_subm <- gather(compare_subm, Prediction, Value, -Id) %>%
   group_by(Id) %>%
   summarize(Pred = mean(Value))
 # compare with actual results
-actual_results <- filter(tourneyResults, Season == 2018) %>%
-  mutate(Id = ifelse(WTeamID > LTeamID, paste("2018",LTeamID,WTeamID,sep = "_"),paste("2018",WTeamID,LTeamID,sep = "_")),
+actual_results <- filter(tourneyResults, Season == pickSeason) %>%
+  mutate(Id = ifelse(WTeamID > LTeamID, paste(pickSeason,LTeamID,WTeamID,sep = "_"),paste(pickSeason,WTeamID,LTeamID,sep = "_")),
          outcome = ifelse(WTeamID > LTeamID, 0,1)) %>%
   select(Id,outcome)
-compare_results <- inner_join(compare_subm,actual_results, by = "Id")
+compare_results <- inner_join(compare_subm,actual_results, by = "Id") %>%
+  inner_join(ensemble_subm, by = "Id")
+# compute logLoss
+logLoss <- summarise_if(compare_results, is.numeric, function(x) .logLoss(data.frame(x = x, y = compare_results$outcome)))
 
 # use this to fill out a bracket manually
 #write.csv(select(predict_mu2, teamName_A, teamName_B, prob), "teamNames_probs.csv",row.names = FALSE)
