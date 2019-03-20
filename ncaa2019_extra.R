@@ -22,10 +22,7 @@ selectedTeams <- thisTourneySeeds$Team
 # Read players and events as well
 players <- read.csv("data/data2019/Players_2018.csv", stringsAsFactors = FALSE)
 #events <- read.csv("data/data2019/Events_2018.csv", stringsAsFactors = FALSE)
-team_stats <- read.csv("data/data2019/RegularSeasonDetailedRollup_v2.csv", stringsAsFactors = FALSE)
-#
-# k-means clusters
-team_stats_18 <- filter(team_stats, Season == pickSeason)
+
 # add percent of home wins
 loc_factor <- filter(regSeason, Season == pickSeason) %>%
   select(WTeamID, WLoc) %>%
@@ -38,22 +35,34 @@ loc_factor <- filter(regSeason, Season == pickSeason) %>%
   #filter(WLoc == "H") %>%
   distinct(WTeamID, HomeWinPerc)
 #
-team_stats_18 <- left_join(team_stats_18, loc_factor, by = c("TeamID" = "WTeamID")) %>%
-  mutate(HomeWinPerc = ifelse(is.na(HomeWinPerc),0,HomeWinPerc))
-
-set.seed(456)
-teamCluster <- kmeans(team_stats_18[,-c(1,2)], num_clusters, nstart = 10, iter.max = 20)
-team_stats_18 <- bind_cols(team_stats_18, cluster = teamCluster$cluster)
-# add clusters to regSeason
-regSeason_18 <- filter(regSeason, Season == pickSeason) %>%
-  left_join(select(team_stats_18, TeamID, WTeam_cluster = cluster), by = c("WTeamID"="TeamID")) %>%
-  left_join(select(team_stats_18, TeamID, LTeam_cluster = cluster), by = c("LTeamID"="TeamID")) 
+if (pickSeason < 2019) {
+  team_stats <- read.csv("data/data2019/RegularSeasonDetailedRollup_v2.csv", stringsAsFactors = FALSE)
+  #
+  # k-means clusters
+  team_stats_18 <- filter(team_stats, Season == pickSeason)
+  team_stats_18 <- left_join(team_stats_18, loc_factor, by = c("TeamID" = "WTeamID")) %>%
+    mutate(HomeWinPerc = ifelse(is.na(HomeWinPerc),0,HomeWinPerc))
+  
+  set.seed(456)
+  teamCluster <- kmeans(team_stats_18[,-c(1,2)], num_clusters, nstart = 10, iter.max = 20)
+  team_stats_18 <- bind_cols(team_stats_18, cluster = teamCluster$cluster)
+  # add clusters to regSeason
+  regSeason_18 <- filter(regSeason, Season == pickSeason) %>%
+    left_join(select(team_stats_18, TeamID, WTeam_cluster = cluster), by = c("WTeamID"="TeamID")) %>%
+    left_join(select(team_stats_18, TeamID, LTeam_cluster = cluster), by = c("LTeamID"="TeamID")) 
+  # Compute stats per team: For pts and Avg pts
+  teamsW <- select(regSeason_18, team_id = WTeamID, team_cluster = WTeam_cluster, pts = WScore, ptsAg = LScore, opp_cluster = LTeam_cluster)
+  teamsL <- select(regSeason_18, team_id = LTeamID, team_cluster = LTeam_cluster, pts = LScore, ptsAg = WScore, opp_cluster = WTeam_cluster)
+  
+} else {
+  # Compute stats per team: For pts and Avg pts
+  teamsW <- select(regSeason_18, team_id = WTeamID, team_cluster = WTeam_cluster, pts = WScore, ptsAg = LScore, opp_cluster = LTeam_cluster)
+  teamsL <- select(regSeason_18, team_id = LTeamID, team_cluster = LTeam_cluster, pts = LScore, ptsAg = WScore, opp_cluster = WTeam_cluster)
+}
+#
 # global variables
 mu <- mean(regSeason_18$WScore)
 sigma <- sd(regSeason_18$WScore)
-# Compute stats per team: For pts and Avg pts
-teamsW <- select(regSeason_18, team_id = WTeamID, team_cluster = WTeam_cluster, pts = WScore, ptsAg = LScore, opp_cluster = LTeam_cluster)
-teamsL <- select(regSeason_18, team_id = LTeamID, team_cluster = LTeam_cluster, pts = LScore, ptsAg = WScore, opp_cluster = WTeam_cluster)
 #
 team_stats <- bind_rows(teamsW,teamsL) %>%
   arrange(team_id) %>%

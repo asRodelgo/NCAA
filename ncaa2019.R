@@ -11,10 +11,11 @@ tourneyResults <- read.csv("data/data2019/NCAATourneyCompactResults.csv")
 tourneySeeds <- read.csv("data/data2019/NCAATourneySeeds.csv")
 thisTourneySeeds <- filter(tourneySeeds, Season == 2019)
 selectedTeams <- thisTourneySeeds$Team
+#coaches <- read.csv("data/data2019/TeamCoaches.csv")
 #
 # global variables
-mu <- mean(regSeason$WScore)
-sigma <- sd(regSeason$WScore)
+mu <- mean(thisSeason$WScore)
+sigma <- sd(thisSeason$WScore)
 
 # Compute stats per team: For pts and Avg pts
 teamsW <- select(thisSeason, team_id = WTeamID, pts = WScore, ptsAg = LScore)
@@ -25,6 +26,15 @@ team_stats <- bind_rows(teamsW,teamsL) %>%
   group_by(team_id) %>%
   mutate(Off_rating = mean(pts), Def_rating = mean(ptsAg)) %>%
   select(team_id, Off_rating, Def_rating) %>%
+  distinct(team_id, .keep_all=TRUE) %>%
+  as.data.frame()
+
+# individual standard deviations
+team_sigmas <- bind_rows(teamsW,teamsL) %>%
+  arrange(team_id) %>%
+  group_by(team_id) %>%
+  mutate(Off_sd = sd(pts), Def_sd = sd(ptsAg)) %>%
+  select(team_id, Off_sd, Def_sd) %>%
   distinct(team_id, .keep_all=TRUE) %>%
   as.data.frame()
 
@@ -50,6 +60,7 @@ team_stats <- left_join(team_stats, tourney_stats, by = c("team_id" = "team_id")
   filter(team_id %in% selectedTeams) %>%
   inner_join(thisTourneySeeds, by=c("team_id" = "TeamID")) %>%
   mutate(Seed = as.numeric(substr(Seed,2,3)), tourneyPts = ifelse(is.na(tourneyPts), 0, tourneyPts)) %>%
+  inner_join(team_sigmas, by = "team_id") %>%
   select(-Season) %>%
   as.data.frame()
 
@@ -64,15 +75,19 @@ for (i in 1:(length(selectedTeams)-1)) {
     if (nrow(thisTeamA)*nrow(thisTeamB) > 0){
       muA <- thisTeamA$Off_rating + thisTeamB$Def_rating - mu + thisTeamA$tourneyPts - thisTeamB$tourneyPts
       muB <- thisTeamB$Off_rating + thisTeamA$Def_rating - mu + thisTeamB$tourneyPts - thisTeamA$tourneyPts
+      sA <- sqrt(thisTeamA$Off_sd^2 + thisTeamB$Def_sd^2) - sigma
+      sB <- sqrt(thisTeamB$Off_sd^2 + thisTeamA$Def_sd^2) - sigma
       predict_mu[k,1] <- selectedTeams[i]
       predict_mu[k,2] <- selectedTeams[j]
       predict_mu[k,3] <- muA
       predict_mu[k,4] <- muB
+      predict_mu[k,5] <- sA
+      predict_mu[k,6] <- sB
       k <- k + 1
     }
   }
 }
-names(predict_mu) <- c("team_A", "team_B", "muA", "muB")
+names(predict_mu) <- c("team_A", "team_B", "muA", "muB","sA","sB")
 
 # Probability of N(muA,sigma) > N(muB,sigma) =
 # Simulate
@@ -81,20 +96,31 @@ names(predict_mu) <- c("team_A", "team_B", "muA", "muB")
 # Analytically
 # 1-pnorm(0,mean = predict_mu$muA[1]-predict_mu$muB[1],sd = sqrt(2)*sigma)
 
-predict_mu <- mutate(predict_mu, prob = 1-pnorm(0,muA-muB,sqrt(2)*sigma))
+#predict_mu <- mutate(predict_mu, prob = 1-pnorm(0,muA-muB,sqrt(2)*sigma))
+predict_mu <- mutate(predict_mu, prob = 1-pnorm(0,muA-muB,sqrt(2)*sigma),
+                     prob_diffSD = 1-pnorm(0,muA-muB,sqrt(sA^2+sB^2)))
 
-submission <- arrange(predict_mu,team_A,team_B) %>%
+submission1 <- arrange(predict_mu,team_A,team_B) %>%
   left_join(teams,by=c("team_A"="TeamID")) %>%
   left_join(teams,by=c("team_B"="TeamID")) %>%
-  mutate(Id = ifelse(team_A > team_B, paste("2018",team_B,team_A,sep = "_"),paste("2018",team_A,team_B,sep = "_")),
+  mutate(Id = ifelse(team_A > team_B, paste("2019",team_B,team_A,sep = "_"),paste("2019",team_A,team_B,sep = "_")),
          Pred = ifelse(team_A > team_B,1-prob,prob)) %>%
   mutate(Pred = ifelse(Pred >=.9,.999,ifelse(Pred<=.1,0.001,Pred))) %>%
   #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
   select(Id,Pred) %>%
   arrange(Id)
+# write.csv(submission1, "data/ncaa2019_muyayo1.csv",row.names = FALSE)
 
+submission2 <- arrange(predict_mu,team_A,team_B) %>%
+  left_join(teams,by=c("team_A"="TeamID")) %>%
+  left_join(teams,by=c("team_B"="TeamID")) %>%
+  mutate(Id = ifelse(team_A > team_B, paste("2019",team_B,team_A,sep = "_"),paste("2019",team_A,team_B,sep = "_")),
+         Pred = ifelse(team_A > team_B,1-prob_diffSD,prob_diffSD)) %>%
+  #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
+  select(Id,Pred) %>%
+  arrange(Id)
+# write.csv(submission2, "data/ncaa2019_muyayo2.csv",row.names = FALSE)
 
-# write.csv(submission, "data/ncaa2018_muyayo.csv",row.names = FALSE)
 
 predict_mu2 <- inner_join(predict_mu, teams, by = c("team_A" = "TeamID")) %>%
   inner_join(teams, by = c("team_B" = "TeamID")) %>%
@@ -119,31 +145,31 @@ ranks <- full_join(ranksA, ranksB, by = c("team_A" = "team_B")) %>%
 team_stats <- inner_join(team_stats, ranks, by=c("team_id"="team_A")) %>%
   arrange(final_rank)
 
-submission2_prep <- left_join(predict_mu2, select(team_stats, team_id, final_rank, Seed), by = c("team_A"="team_id")) %>%
+submission3_prep <- left_join(predict_mu2, select(team_stats, team_id, final_rank, Seed), by = c("team_A"="team_id")) %>%
   left_join(select(team_stats, team_id, final_rank, Seed), by = c("team_B"="team_id")) %>%
   mutate(rank_diff = final_rank.x - final_rank.y, seed_diff = Seed.x - Seed.y) %>%
   select(-starts_with("final_ra"), -starts_with("Seed.")) %>%
   mutate(prob_final = prob - (rank_diff + seed_diff)/100) %>%
   mutate(prob_final = ifelse(prob_final > 1, 1, ifelse(prob_final < 0, 0, prob_final)))
 
-submission2 <- arrange(submission2_prep,team_A,team_B) %>%
+submission3 <- arrange(submission3_prep,team_A,team_B) %>%
   left_join(teams,by=c("team_A"="TeamID")) %>%
   left_join(teams,by=c("team_B"="TeamID")) %>%
-  mutate(Id = ifelse(team_A > team_B, paste("2018",team_B,team_A,sep = "_"),paste("2018",team_A,team_B,sep = "_")),
+  mutate(Id = ifelse(team_A > team_B, paste("2019",team_B,team_A,sep = "_"),paste("2019",team_A,team_B,sep = "_")),
          Pred = ifelse(team_A > team_B,1-prob_final,prob_final)) %>%
   #mutate(Pred = ifelse(Pred >=.9,.999,ifelse(Pred<=.1,0.001,Pred))) %>%
   #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
   select(Id,Pred) %>%
   arrange(Id)
 
-# write.csv(submission2, "data/ncaa2018_muyayo2.csv",row.names = FALSE)
+# write.csv(submission3, "data/ncaa2019_muyayo3.csv",row.names = FALSE)
 
-submission3 <- mutate(submission2, Pred = ifelse(Pred >=.95,.999,ifelse(Pred<=.05,0.001,Pred))) %>%
+submission4 <- mutate(submission3, Pred = ifelse(Pred >=.95,.999,ifelse(Pred<=.05,0.001,Pred))) %>%
   #select(Id,Pred,Team_Name_A = Team_Name.x, Team_Name_B = Team_Name.y) %>%
   select(Id,Pred) %>%
   arrange(Id)
 
-# write.csv(submission3, "data/ncaa2018_muyayo3.csv",row.names = FALSE)
+# write.csv(submission3, "data/ncaa2019_muyayo4.csv",row.names = FALSE)
 
 # compare submissions
 compare_subm <- inner_join(submission, submission2, by = "Id")
@@ -152,8 +178,8 @@ compare_subm <- inner_join(submission, submission2, by = "Id")
 #write.csv(select(predict_mu2, teamName_A, teamName_B, prob), "teamNames_probs.csv",row.names = FALSE)
 
 # Check out specific match probabilities:
-teamA <- "Virg"
-teamB <- "UMBC"
+teamA <- "Syrac"
+teamB <- "Gonz"
 filter(predict_mu2, (grepl(teamA,teamName_A) & grepl(teamB,teamName_B)) |
          (grepl(teamA,teamName_B) & grepl(teamB,teamName_A)))
 
